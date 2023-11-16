@@ -57,7 +57,7 @@ def camino_mas_corto(graph, source, weight='weight'):
 
     return distances
 
-# Calcula la centralidad de cercanía
+# Calcula la centralidad de cercanía manualmente
 closeness_centrality = {}
 
 for node in G.nodes:
@@ -70,11 +70,3 @@ for node in G.nodes:
 # Imprime los valores de centralidad de cercanía
 for node, closeness in closeness_centrality.items():
     print(f'Nodo: {node}, Centralidad de Cercanía: {closeness}')
-
-closest_node = None
-for node in G.nodes:
-    if closest_node is None or closeness_centrality[closest_node] < closeness_centrality[node]:
-        closest_node = node
-
-print(f"El nodos más cercano a los demas es: {closest_node}")
-plt.show()
