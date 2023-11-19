@@ -1,9 +1,34 @@
+from flask import Flask, jsonify, request
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
 import numpy as np
 
+app = Flask(__name__)
 
+# ALGORITMOS CLAVES
+def camino_mas_corto(graph, source, weight='weight'):
+
+    distances = {node: float('inf') for node in graph.nodes}
+    distances[source] = 0
+    visited = set()
+
+
+    while visited != set(graph.nodes): #Basicamente mientras no se hayan visitado todos los nodos
+        current_node = None
+        #Se verifica cual e es el más corto y se pone como current node
+        for node in graph.nodes:
+            if node not in visited and (current_node is None or distances[node] < distances[current_node]):
+                current_node = node
+
+        visited.add(current_node)
+        neighbors = set(graph[current_node]) - visited
+        for neighbor in neighbors:
+            potential = distances[current_node] + graph[current_node][neighbor].get(weight, 1)
+            if potential < distances[neighbor]:
+                distances[neighbor] = potential
+
+    return distances
 def haversine(lon1, lat1, lon2, lat2):
     
     
@@ -28,8 +53,7 @@ def haversine(lon1, lat1, lon2, lat2):
 
     return c*r
 
-G = nx.Graph()
-
+# DATOS PARA USAR
 nodes = [
     (-12.088458678552852, -76.99995413516139),
     (-12.090380562754838, -76.99966032710414),
@@ -59,10 +83,6 @@ nodes = [
     (-12.092167457482644, -76.99596805144829),
 
 ]
-
-G.add_nodes_from(nodes)
-
-# Agregar aristas
 edges = [
     ((-12.088458678552852, -76.99995413516139), (-12.088378443303547, -76.99937003526539)),
     ((-12.088458678552852, -76.99995413516139), (-12.090380562754838, -76.99966032710414)),
@@ -104,8 +124,10 @@ edges = [
     ((-12.092714502764341, -76.99873886670235), (-12.09226863928874, -76.99720467799904)),
 ]
 
+# CREAR GRAFO
+G = nx.Graph()
+G.add_nodes_from(nodes)
 G.add_edges_from(edges)
-
 for edge in edges:
     node1, node2 = edge
     lat1, lon1 = node1
@@ -113,66 +135,43 @@ for edge in edges:
     weight = haversine(lat1, lon1, lat2, lon2)
     G.add_edge(node1, node2, weight=weight)
 
-# Dibujar el grafo
-pos = {node: node for node in G.nodes()}
+@app.route('/')
+def bienvenida():
+    return "Bienvenido este es un backend para complejidad :)"
 
-nx.draw(G, pos, with_labels=False, font_weight='bold', node_size=700, node_color='skyblue', font_size=8, font_color='black', font_family='Arial')
-edge_labels = {(n1, n2): f"{weight:.3f}" for (n1, n2, weight) in G.edges(data='weight')}
-nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+@app.route('/coordinates', methods=['POST'])
+def closenessAlgorithm():
+    longitudes = []
+    latitudes = []
+    data = request.get_json()
+    for item in data:
+        latitudes.append(float(item.get('latitude')))
+        longitudes.append(float(item.get('longitude')))
+    
+    targets = dict()
+    word = 65
 
+    for lat, lon in zip(latitudes, longitudes):
+        key = chr(word)
+        targets[key] = (lat, lon)
+        word += 1  
 
-# Función para calcular la distancia ponderada entre dos nodos utilizando Dijkstra
-# En esta función se calcula en la variable distances las distancias menores de un nodo a todos los demas por ejemplo:
-# {'A': 0, 'B': 3, 'C': 2, 'D': 6, 'E': 3, 'J': 6}
-# De A a B el camino más corto es 3. De A a D el camino más 6.
-def camino_mas_corto(graph, source, weight='weight'):
+    closeness_centrality = {}
 
-    distances = {node: float('inf') for node in graph.nodes}
-    distances[source] = 0
-    visited = set()
+    for node in targets:
+        total_distance = 0
+        shortest_path_length = camino_mas_corto(G, targets[node], weight='weight')
+        for _node in G.nodes:
+            total_distance+=shortest_path_length[_node]
+        closeness_centrality[node] = 1 / total_distance
 
+    closest_node = None
 
-    while visited != set(graph.nodes): #Basicamente mientras no se hayan visitado todos los nodos
-        current_node = None
-        #Se verifica cual e es el más corto y se pone como current node
-        for node in graph.nodes:
-            if node not in visited and (current_node is None or distances[node] < distances[current_node]):
-                current_node = node
+    for node in targets:
+        if closest_node is None or closeness_centrality[closest_node] < closeness_centrality[node]:
+            closest_node = node
 
-        visited.add(current_node)
-        neighbors = set(graph[current_node]) - visited
-        for neighbor in neighbors:
-            potential = distances[current_node] + graph[current_node][neighbor].get(weight, 1)
-            if potential < distances[neighbor]:
-                distances[neighbor] = potential
+    return jsonify(targets[closest_node]), 201
 
-    return distances
-
-# Calcula la centralidad de cercanía
-closeness_centrality = {}
-
-targets={'A': (-12.089992243978523, -76.99690634527937), 
-         'B': (-12.088378443303547, -76.99937003526539), 
-         'C': (-12.090308175716393, -76.99907571953004),
-         'D': (-12.092714502764341, -76.99873886670235)}
-
-for node in targets:
-    total_distance = 0
-    shortest_path_length = camino_mas_corto(G, targets[node], weight='weight')
-    for _node in G.nodes:
-        total_distance+=shortest_path_length[_node]
-    closeness_centrality[node] = 1 / total_distance
-
-# Imprime los valores de centralidad de cercanía
-for node, closeness in closeness_centrality.items():
-    print(f'Nodo: {node}, Centralidad de Cercanía: {closeness}')
-
-closest_node = None
-for node in targets:
-    if closest_node is None or closeness_centrality[closest_node] < closeness_centrality[node]:
-        closest_node = node
-
-print(f"El nodos más cercano a los demas es: {closest_node}")
-for label, node in targets.items():
-    nx.draw_networkx_labels(G, pos, labels={node: label})
-plt.show()
+if __name__ ==  '__main__':
+    app.run(debug=True)
